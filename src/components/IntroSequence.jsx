@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-// Sequence: "HAPPY" → "24" → "BIRTHDAY" → "PRINCESS" → fade out
 const STEPS = [
-  { text: 'HAPPY',     duration: 1200 },
-  { text: '24',        duration: 1000 },
-  { text: 'BIRTHDAY',  duration: 1200 },
-  { text: 'PRINCESS',  duration: 1400 },
-  { text: null,        duration: 800  }, // fade out
+  { text: 'Hi, Princess',         duration: 2500 },
+  { text: 'Happy Birthday',        duration: 2500 },
+  { text: 'I love you so much',    duration: 2500 },
+  { text: null,                    duration: 600  },
 ]
 
 const css = `
@@ -26,35 +24,98 @@ const css = `
 }
 .intro-text {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(64px, 18vw, 160px);
+  font-size: clamp(52px, 14vw, 130px);
   color: #ff2d9f;
-  letter-spacing: 6px;
-  animation: introFadeIn 0.4s ease forwards, introGlitch 1.5s ease-in-out infinite;
+  letter-spacing: 5px;
+  text-align: center;
+  padding: 0 20px;
+  animation: introFadeIn 0.5s ease forwards, introGlitch 2s ease-in-out infinite;
   user-select: none;
 }
-@keyframes skipPulse {
-  0%,100% { opacity: .4 }
-  50% { opacity: .8 }
+
+/* ── Glitter particles ── */
+@keyframes glitterFly {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0); opacity: 0; }
+}
+.glitter-particle {
+  position: fixed;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: var(--color);
+  pointer-events: none;
+  animation: glitterFly var(--dur) var(--delay) ease-out forwards;
+  z-index: 50;
+}
+@keyframes glitterBurst {
+  0%   { opacity: 1; transform: scale(0.2); }
+  60%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+.glitter-ring {
+  position: fixed;
+  border-radius: 50%;
+  border: 2px solid rgba(255,45,159,.6);
+  pointer-events: none;
+  animation: glitterBurst 1s ease-out forwards;
+  z-index: 49;
 }
 `
 
+/* ── Generate glitter particles data once ── */
+const COLORS = [
+  '#ff2d9f', '#ff9de2', '#ffcc00', '#fff', '#b000ff',
+  '#ff69d4', '#00e5ff', '#ffe066', '#ff6fd8', '#c0f',
+]
+const PARTICLE_COUNT = 120
+const particles = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
+  const angle = Math.random() * 360
+  const dist = 80 + Math.random() * 260
+  const rad = (angle * Math.PI) / 180
+  return {
+    id: i,
+    left: `${40 + Math.random() * 20}vw`,
+    top:  `${35 + Math.random() * 30}vh`,
+    size: `${3 + Math.random() * 7}px`,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    dx: `${Math.cos(rad) * dist}px`,
+    dy: `${Math.sin(rad) * dist}px`,
+    rot: `${Math.random() * 720 - 360}deg`,
+    dur: `${0.6 + Math.random() * 0.9}s`,
+    delay: `${Math.random() * 0.3}s`,
+  }
+})
+
+const RINGS = [
+  { size: 80,  delay: '0s',   dur: '0.9s'  },
+  { size: 160, delay: '0.1s', dur: '1.0s'  },
+  { size: 260, delay: '0.2s', dur: '1.1s'  },
+]
+
 export default function IntroSequence({ onDone }) {
-  const [stepIdx, setStepIdx] = useState(0)
-  const [visible, setVisible] = useState(true)
+  const [stepIdx, setStepIdx]       = useState(0)
+  const [visible, setVisible]       = useState(true)
+  const [showGlitter, setShowGlitter] = useState(false)
+  const timeoutRef = useRef(null)
 
   useEffect(() => {
-    let timeout
     const advance = (idx) => {
-      if (idx >= STEPS.length) { onDone(); return }
+      if (idx >= STEPS.length) {
+        /* show glitter burst before calling onDone */
+        setShowGlitter(true)
+        timeoutRef.current = setTimeout(() => onDone(), 1200)
+        return
+      }
       setStepIdx(idx)
       setVisible(true)
-      timeout = setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         setVisible(false)
-        setTimeout(() => advance(idx + 1), 300)
+        timeoutRef.current = setTimeout(() => advance(idx + 1), 350)
       }, STEPS[idx].duration)
     }
     advance(0)
-    return () => clearTimeout(timeout)
+    return () => clearTimeout(timeoutRef.current)
   }, [onDone])
 
   const current = STEPS[stepIdx]
@@ -63,39 +124,53 @@ export default function IntroSequence({ onDone }) {
     <div style={{
       position: 'fixed', inset: 0, zIndex: 10,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexDirection: 'column',
     }}>
       <style>{css}</style>
 
+      {/* ── Step text ── */}
       {current?.text && (
         <span
           className="intro-text"
-          style={{
-            opacity: visible ? 1 : 0,
-            transition: 'opacity 0.25s ease',
-          }}
+          style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.3s ease' }}
         >
           {current.text}
         </span>
       )}
 
-      {/* Skip button */}
-      <button
-        onClick={onDone}
-        style={{
-          position: 'fixed', bottom: 32, right: 24,
-          background: 'rgba(255,45,159,.15)',
-          border: '1px solid rgba(255,45,159,.4)',
-          color: '#ff9de2',
-          padding: '8px 20px', borderRadius: '30px',
-          cursor: 'pointer', fontSize: '13px',
-          fontFamily: 'monospace', letterSpacing: '2px',
-          animation: 'skipPulse 2s ease-in-out infinite',
-          zIndex: 20,
-        }}
-      >
-        SKIP →
-      </button>
+      {/* ── Glitter explosion ── */}
+      {showGlitter && (
+        <>
+          {/* Expanding rings */}
+          {RINGS.map((r, i) => (
+            <div
+              key={i}
+              className="glitter-ring"
+              style={{
+                width: r.size, height: r.size,
+                left: `calc(50% - ${r.size / 2}px)`,
+                top:  `calc(50% - ${r.size / 2}px)`,
+                animationDuration: r.dur,
+                animationDelay: r.delay,
+              }}
+            />
+          ))}
+
+          {/* Flying particles */}
+          {particles.map(p => (
+            <div
+              key={p.id}
+              className="glitter-particle"
+              style={{
+                left: p.left, top: p.top,
+                '--size': p.size, '--color': p.color,
+                '--dx': p.dx, '--dy': p.dy,
+                '--rot': p.rot, '--dur': p.dur,
+                '--delay': p.delay,
+              }}
+            />
+          ))}
+        </>
+      )}
     </div>
   )
 }
